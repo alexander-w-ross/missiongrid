@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useMissionActions } from "@/hooks/useMissionActions";
+import { useTacticalState } from "@/hooks/useTacticalState";
 import { CELL, cellCenter, cellTopLeft, fieldSize, pxToCell } from "@/lib/grid";
 import type { Fire, MissionState, Responder, Tool } from "@/lib/types";
 import { useMissionStore } from "@/store/missionStore";
@@ -10,7 +11,9 @@ import { MissionControlMarker } from "./MissionControlMarker";
 const key = (x: number, y: number) => `${x},${y}`;
 
 export function MissionGrid({ missionId }: { missionId: string }) {
-  const state = useMissionStore((s) => s.state);
+  // Reconstructed past state while replaying, otherwise the live folded state.
+  const state = useTacticalState();
+  const replaying = useMissionStore((s) => s.replayCursor) != null;
   const tool = useMissionStore((s) => s.tool);
   const selectedResponderId = useMissionStore((s) => s.selectedResponderId);
   const selectedFireId = useMissionStore((s) => s.selectedFireId);
@@ -97,8 +100,11 @@ export function MissionGrid({ missionId }: { missionId: string }) {
     }
   }
 
-  const cursor =
-    tool === "select" ? "cursor-pointer" : "cursor-crosshair";
+  const cursor = replaying
+    ? "cursor-default"
+    : tool === "select"
+      ? "cursor-pointer"
+      : "cursor-crosshair";
 
   return (
     <svg
@@ -107,6 +113,8 @@ export function MissionGrid({ missionId }: { missionId: string }) {
       className={`h-full w-full touch-none select-none ${cursor}`}
       onClick={handleClick}
       onMouseMove={(e) => {
+        // While replaying the tactical view is read-only — no placement preview.
+        if (replaying) return;
         const cell = eventToCell(e);
         // Only re-render when the hovered cell actually changes.
         setHover((prev) =>
@@ -209,7 +217,7 @@ export function MissionGrid({ missionId }: { missionId: string }) {
       />
 
       {/* hover placement preview */}
-      {hover && (
+      {hover && !replaying && (
         <HoverPreview tool={tool} cell={hover} meta={cellMeta(hover.x, hover.y)} />
       )}
     </svg>

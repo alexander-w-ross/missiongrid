@@ -14,7 +14,7 @@ import { ResponderPanel } from "@/components/ResponderPanel";
 import { Toolbar } from "@/components/Toolbar";
 import { useMissionConnection } from "@/hooks/useMissionConnection";
 import { config } from "@/lib/config";
-import { cn } from "@/lib/utils";
+import { cn, formatClock } from "@/lib/utils";
 import { useMissionStore } from "@/store/missionStore";
 
 export default function MissionPage() {
@@ -23,6 +23,7 @@ export default function MissionPage() {
   useMissionConnection(missionId);
 
   const state = useMissionStore((s) => s.state);
+  const replayCursor = useMissionStore((s) => s.replayCursor);
   const [flowOpen, setFlowOpen] = useState(true);
   const [flowExpanded, setFlowExpanded] = useState(false);
 
@@ -51,9 +52,15 @@ export default function MissionPage() {
               <header className="relative flex items-center gap-2 overflow-hidden border-b border-[color:var(--color-line)] px-3 py-2">
                 <Radar className="h-4 w-4 text-[color:var(--color-teal)]" strokeWidth={2} />
                 <span className="font-display text-sm tracking-wide">Tactical Display</span>
-                <span className="label ml-auto">
-                  {config.mock ? "Local simulation" : "Live feed"}
-                </span>
+                {replayCursor ? (
+                  <span className="label ml-auto text-[color:var(--color-amber)]">
+                    Replay @ {formatClock(replayCursor.occurred_at)}
+                  </span>
+                ) : (
+                  <span className="label ml-auto">
+                    {config.mock ? "Local simulation" : "Live feed"}
+                  </span>
+                )}
                 <span
                   className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-transparent via-[color:var(--color-teal)]/10 to-transparent"
                   style={{ animation: "sweep 6s linear infinite" }}
