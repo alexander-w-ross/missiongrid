@@ -33,35 +33,38 @@ export function ReplayEventList({ replay }: { replay: ReplayController }) {
 
   return (
     <ul className="min-h-0 flex-1 overflow-y-auto font-mono text-[11px] scanlines">
-      {ordered.map((e) => {
+      {ordered.map((e, i) => {
         const active = e.id === currentId;
         const tone = TONE[e.type] ?? "muted";
         return (
-          <li
-            key={e.id}
-            ref={active ? activeRef : null}
-            className={cn(
-              "flex gap-2 border-b border-[color:var(--color-line)]/50 px-3 py-1.5 leading-tight transition-colors",
-              active && "bg-[color:var(--color-cyan)]/10",
-            )}
-          >
-            <span className="w-3 shrink-0 text-[color:var(--color-cyan)]">
-              {active ? "▸" : ""}
-            </span>
-            <span className="shrink-0 tabular-nums text-[color:var(--color-faint)]">
-              {formatClock(e.occurred_at)}
-            </span>
-            <span
+          <li key={e.id} ref={active ? activeRef : null}>
+            <button
+              type="button"
+              onClick={() => replay.playFrom(i)}
+              title="Replay from this event"
               className={cn(
-                "shrink-0 font-semibold uppercase",
-                TONE_CLASS[tone],
+                "flex w-full gap-2 border-b border-[color:var(--color-line)]/50 px-3 py-1.5 text-left leading-tight transition-colors hover:bg-[color:var(--color-cyan)]/[0.06]",
+                active && "bg-[color:var(--color-cyan)]/10",
               )}
             >
-              {short(e.type)}
-            </span>
-            <span className="truncate text-[color:var(--color-muted)]">
-              {describe(e, state)}
-            </span>
+              <span className="w-3 shrink-0 text-[color:var(--color-cyan)]">
+                {active ? "▸" : ""}
+              </span>
+              <span className="shrink-0 tabular-nums text-[color:var(--color-faint)]">
+                {formatClock(e.occurred_at)}
+              </span>
+              <span
+                className={cn(
+                  "shrink-0 font-semibold uppercase",
+                  TONE_CLASS[tone],
+                )}
+              >
+                {short(e.type)}
+              </span>
+              <span className="truncate text-[color:var(--color-muted)]">
+                {describe(e, state)}
+              </span>
+            </button>
           </li>
         );
       })}

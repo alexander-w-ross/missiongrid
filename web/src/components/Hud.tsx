@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Hexagon } from "lucide-react";
+import { Github, Hexagon } from "lucide-react";
 import { useMissionStore } from "@/store/missionStore";
 import { ConnectionBadge } from "./ConnectionBadge";
 
@@ -51,6 +51,16 @@ export function Hud() {
           value={String(activeFires)}
           tone={activeFires > 0 ? "fire" : undefined}
         />
+        <a
+          href="https://github.com/alexander-w-ross/missiongrid"
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label="View source on GitHub"
+          title="View source on GitHub"
+          className="text-[color:var(--color-muted)] transition-colors hover:text-[color:var(--color-ink)]"
+        >
+          <Github className="h-5 w-5" strokeWidth={1.8} />
+        </a>
         <ConnectionBadge />
       </div>
     </header>

@@ -205,6 +205,7 @@ export interface ReplayController {
   pause: () => void; // freeze, keeping position
   restart: () => void; // re-snapshot the log and play from the top
   seek: (index: number) => void;
+  playFrom: (index: number) => void; // re-snapshot, then play starting at this event
   setSpeed: (speed: number) => void;
 }
 
@@ -332,6 +333,19 @@ export function useArchitectureSignals(): ArchitectureSignals {
           clearTimer();
           step();
         }
+      },
+      playFrom(i: number) {
+        // Re-snapshot the live log (it may have grown), jump to the clicked
+        // event, and play from there — works from idle/paused alike.
+        clearTimer();
+        const buf = snapshot();
+        if (buf.length === 0) return;
+        const start = clamp(Math.round(i), 0, buf.length - 1);
+        idxRef.current = start;
+        setReplayIndex(start);
+        statusRef.current = "playing";
+        setReplayStatus("playing");
+        step();
       },
       setSpeed(s: number) {
         speedRef.current = s;
