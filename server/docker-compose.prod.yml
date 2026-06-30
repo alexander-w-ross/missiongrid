@@ -1,0 +1,107 @@
+name: missiongrid
+
+# Production stack for Coolify (self-hosted, Hetzner). Unlike docker-compose.yml
+# (dev) there are no bind mounts, no --reload/watchfiles, and no redpanda-console;
+# the workers are real services (not gated behind a profile) and a one-shot
+# `migrate` service runs `alembic upgrade head` before the app processes boot.
+#
+# Set DATABASE_URL, KAFKA_BOOTSTRAP_SERVERS and CORS_ORIGINS as environment
+# variables in the Coolify UI (Coolify materializes them into the .env consumed
+# below). Expose ONLY the `api` service via Coolify's domain settings.
+
+# Shared definition for the app containers (api + workers): same image, same env,
+# all wait for migrations to finish before starting.
+x-app: &app
+  build: .
+  env_file:
+    - .env
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redpanda:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: missiongrid
+      POSTGRES_PASSWORD: missiongrid     # override via Coolify env for a real secret
+      POSTGRES_DB: missiongrid
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U missiongrid -d missiongrid"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Single-node Kafka-API broker. Internal only — clients connect to redpanda:9092
+  # on the compose network; no host port mapping in prod.
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --kafka-addr=internal://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda:9092
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+      - --mode=dev-container
+      - --smp=1
+      - --default-log-level=info
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # One-shot: apply DB migrations, then exit 0. The app services gate on this
+  # completing successfully (see *app depends_on).
+  migrate:
+    build: .
+    command: alembic upgrade head
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # The only service exposed to the proxy. In Coolify, set this service's domain
+  # (e.g. https://api.<server-ip>.sslip.io); Traefik terminates TLS and passes
+  # WebSocket upgrades through to /ws/missions/{id}. Keep at 1 replica — the WS
+  # broadcaster fans out in-process.
+  api:
+    <<: *app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      - SERVICE_FQDN_API_8000        # Coolify fills this with the public https URL
+    expose:
+      - "8000"
+
+  # Stateful tick loop + in-memory world — NEVER scale past 1 replica.
+  simulation-worker:
+    <<: *app
+    command: python -m app.workers.simulation_worker
+
+  # Consumes mission.events.v1 → writes the Postgres read model.
+  projector-worker:
+    <<: *app
+    command: python -m app.workers.projector_worker
+
+  # Consumes responder.telemetry.v1 → reconnect / reconciliation events.
+  telemetry-worker:
+    <<: *app
+    command: python -m app.workers.telemetry_worker
+
+volumes:
+  postgres-data:
+  redpanda-data:

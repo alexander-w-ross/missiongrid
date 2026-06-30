@@ -1,0 +1,126 @@
+name: missiongrid
+
+# Shared env for the app containers (api + workers). Sourced from .env.
+x-app-env: &app-env
+  env_file:
+    - .env
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: missiongrid
+      POSTGRES_PASSWORD: missiongrid
+      POSTGRES_DB: missiongrid
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U missiongrid -d missiongrid"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Redpanda: single-node, Kafka-API compatible broker (no Zookeeper/JVM).
+  # Internal clients (api/workers) connect to redpanda:9092.
+  # Host tools (e.g. rpk on your machine) connect to localhost:19092.
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+      - --mode=dev-container
+      - --smp=1
+      - --default-log-level=info
+    ports:
+      - "19092:19092"   # kafka api (host)
+      - "18081:18081"   # schema registry (host)
+      - "18082:18082"   # pandaproxy (host)
+      - "9644:9644"     # admin api
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Web UI for browsing topics/messages/consumer groups: http://localhost:8080
+  redpanda-console:
+    image: redpandadata/console:v2.7.2
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    <<: *app-env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app          # live code reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+
+  # --- Workers ---
+  # Gated behind the "workers" profile so a plain `docker compose up` does NOT
+  # try to start them (the modules don't exist until you write them, and would
+  # crash-loop). Once implemented, start with: docker compose --profile workers up -d
+  simulation-worker:
+    build: .
+    command: watchfiles "python -m app.workers.simulation_worker" app
+    profiles: ["workers"]
+    <<: *app-env
+    volumes:
+      - ./:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+
+  projector-worker:
+    build: .
+    command: watchfiles "python -m app.workers.projector_worker" app
+    profiles: ["workers"]
+    <<: *app-env
+    volumes:
+      - ./:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+
+  telemetry-worker:
+    build: .
+    command: watchfiles "python -m app.workers.telemetry_worker" app
+    profiles: ["workers"]
+    <<: *app-env
+    volumes:
+      - ./:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redpanda-data:

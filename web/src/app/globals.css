@@ -1,0 +1,180 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   MissionGrid — tactical operations console theme
+   --------------------------------------------------------------------------- */
+
+@theme {
+  /* fonts (provided by next/font on <html>) */
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-display: var(--font-chakra), var(--font-plex-sans), sans-serif;
+
+  /* surfaces */
+  --color-base: #060b0d;
+  --color-base-2: #0a1316;
+  --color-surface: #0c1619;
+  --color-surface-2: #10211f;
+  --color-line: #173034;
+  --color-line-bright: #1f4a4a;
+
+  /* ink */
+  --color-ink: #d6ece8;
+  --color-muted: #6a8a8a;
+  --color-faint: #3d5a59;
+
+  /* signal palette */
+  --color-teal: #2ee6c6;
+  --color-cyan: #41d6ff;
+  --color-amber: #ffb13b;
+  --color-red: #ff4d57;
+  --color-fire: #ff6a1a;
+  --color-fire-core: #ffd24a;
+  --color-mc: #ffd24a;
+  --color-mountain: #2c3b40;
+  --color-mountain-edge: #46606a;
+  --color-green: #44e07a;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  border-color: var(--color-line);
+}
+
+html,
+body {
+  background-color: var(--color-base);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  /* layered atmosphere: vignette + faint engineering grid */
+  background-image:
+    radial-gradient(120% 90% at 50% -10%, rgba(46, 230, 198, 0.06), transparent 55%),
+    radial-gradient(80% 60% at 100% 110%, rgba(65, 214, 255, 0.05), transparent 60%),
+    linear-gradient(transparent 0, var(--color-base) 70%),
+    linear-gradient(to right, rgba(23, 48, 52, 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(23, 48, 52, 0.35) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 44px 44px, 44px 44px;
+  background-attachment: fixed;
+}
+
+/* film grain overlay (kept extremely subtle) */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------------------------------------------------------------------------
+   Reusable component primitives
+   --------------------------------------------------------------------------- */
+
+@layer components {
+  /* framed console panel with corner ticks */
+  .panel {
+    position: relative;
+    background:
+      linear-gradient(180deg, rgba(16, 33, 31, 0.55), rgba(10, 19, 22, 0.75));
+    border: 1px solid var(--color-line);
+    backdrop-filter: blur(6px);
+  }
+  .panel::before,
+  .panel::after {
+    content: "";
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border: 1px solid var(--color-line-bright);
+    pointer-events: none;
+  }
+  .panel::before {
+    top: -1px;
+    left: -1px;
+    border-right: none;
+    border-bottom: none;
+  }
+  .panel::after {
+    bottom: -1px;
+    right: -1px;
+    border-left: none;
+    border-top: none;
+  }
+
+  .label {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.625rem;
+    color: var(--color-muted);
+  }
+
+  .stat-value {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 12px currentColor;
+  }
+  .scanlines {
+    background-image: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.22) 0px,
+      rgba(0, 0, 0, 0.22) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  }
+}
+
+/* blinking live dot */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.live-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+/* subtle scan sweep used on the grid header */
+@keyframes sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(220%); }
+}
+
+/* custom scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-bright) transparent;
+}
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-line-bright);
+  border-radius: 0;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::selection {
+  background: rgba(46, 230, 198, 0.3);
+  color: #fff;
+}
