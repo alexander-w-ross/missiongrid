@@ -207,6 +207,7 @@ export interface ReplayController {
   seek: (index: number) => void;
   playFrom: (index: number) => void; // re-snapshot, then play starting at this event
   setSpeed: (speed: number) => void;
+  goLive: () => void; // stop replaying and snap the tactical view back to live
 }
 
 export interface ArchitectureSignals {
@@ -260,6 +261,10 @@ export function useArchitectureSignals(): ArchitectureSignals {
   eventsRef.current = events;
 
   const replayApi = useMemo(() => {
+    // Push the tactical time-travel cursor into the mission store so the Tactical
+    // Display reconstructs state at the event being shown (null = live).
+    const setCursor = (ev: MissionEvent | null) =>
+      useMissionStore.getState().setReplayCursor(ev);
     const clearTimer = () => {
       if (timerRef.current != null) {
         clearTimeout(timerRef.current);
@@ -271,6 +276,7 @@ export function useArchitectureSignals(): ArchitectureSignals {
       statusRef.current = "idle";
       setReplayStatus("idle");
       setReplayCurrent(null);
+      setCursor(null); // playhead ran past the last event → tactical view goes live
     };
     const step = () => {
       const buf = bufferRef.current;
@@ -281,6 +287,7 @@ export function useArchitectureSignals(): ArchitectureSignals {
       const ev = buf[idxRef.current];
       engine.event(ev.type);
       setReplayCurrent(ev);
+      setCursor(ev);
       idxRef.current += 1;
       setReplayIndex(idxRef.current);
       timerRef.current = setTimeout(step, BASE_DELAY / speedRef.current);
@@ -318,6 +325,7 @@ export function useArchitectureSignals(): ArchitectureSignals {
         if (buf.length === 0) {
           statusRef.current = "idle";
           setReplayStatus("idle");
+          setCursor(null);
           return;
         }
         statusRef.current = "playing";
@@ -329,6 +337,9 @@ export function useArchitectureSignals(): ArchitectureSignals {
         const clamped = clamp(Math.round(i), 0, buf.length);
         idxRef.current = clamped;
         setReplayIndex(clamped);
+        // Move the tactical view to the event now under the playhead (past the end
+        // → live). When playing, step() re-shows this same event next.
+        setCursor(buf[clamped] ?? null);
         if (statusRef.current === "playing") {
           clearTimer();
           step();
@@ -354,6 +365,15 @@ export function useArchitectureSignals(): ArchitectureSignals {
           clearTimeout(timerRef.current);
           timerRef.current = setTimeout(step, BASE_DELAY / s);
         }
+      },
+      goLive() {
+        // Escape hatch (e.g. paused mid-history): stop replaying and snap the
+        // tactical view back to the live stream.
+        clearTimer();
+        statusRef.current = "idle";
+        setReplayStatus("idle");
+        setReplayCurrent(null);
+        setCursor(null);
       },
     };
   }, [engine]);

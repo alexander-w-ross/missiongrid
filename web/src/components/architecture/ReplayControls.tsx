@@ -117,6 +117,21 @@ export function ReplayControls({ replay }: { replay: ReplayController }) {
         <span className="shrink-0 font-mono text-[10px] tabular-nums text-[color:var(--color-faint)]">
           {replay.index} / {total}
         </span>
+
+        {replay.current && (
+          <button
+            type="button"
+            onClick={replay.goLive}
+            aria-label="Return to live"
+            className={cn(
+              btn,
+              "shrink-0 border-[color:var(--color-teal)]/50 text-[color:var(--color-teal)] hover:text-[color:var(--color-teal)]",
+            )}
+          >
+            <span className="live-dot inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--color-teal)]" />
+            Live
+          </button>
+        )}
       </div>
     </div>
   );

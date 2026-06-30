@@ -18,6 +18,16 @@ export function useMissionActions(missionId: string) {
       label: string,
       command: string,
     ): Promise<T | undefined> => {
+      // Block commands while the tactical view is showing a past (replayed) state —
+      // they'd act against positions that no longer match the live mission.
+      if (useMissionStore.getState().replayCursor != null) {
+        setNotice({
+          id: "replay-locked",
+          kind: "warn",
+          message: "Controls locked during replay — return to live to act.",
+        });
+        return undefined;
+      }
       // Announce the command the instant it's fired so the data-flow view can
       // animate the command half of the pipeline immediately (its effects come
       // back later as events on the live stream).

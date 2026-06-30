@@ -32,6 +32,12 @@ interface MissionStore {
   selectedFireId: string | null;
   notice: Notice | null;
   events: MissionEvent[];
+  /** Snapshot the timeline folds forward from; `fold(baseState, timeline) === state`. */
+  baseState: MissionState | null;
+  /** Post-snapshot events in chronological order, for tactical time-travel. */
+  timeline: MissionEvent[];
+  /** Event whose reconstructed state the tactical view shows; null = live. */
+  replayCursor: MissionEvent | null;
 
   setSnapshot: (state: MissionState) => void;
   applyEvent: (event: MissionEvent) => void;
@@ -40,6 +46,7 @@ interface MissionStore {
   selectResponder: (id: string | null) => void;
   selectFire: (id: string | null) => void;
   setNotice: (n: Notice | null) => void;
+  setReplayCursor: (event: MissionEvent | null) => void;
   reset: () => void;
 }
 
@@ -53,8 +60,21 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
   selectedFireId: null,
   notice: null,
   events: [],
+  baseState: null,
+  timeline: [],
+  replayCursor: null,
 
-  setSnapshot: (state) => set({ state, events: state.recent_events ?? [] }),
+  // A fresh snapshot is the base we fold forward from; the timeline (post-snapshot
+  // events) and any active replay are reset so time-travel can't dangle on a stale
+  // base.
+  setSnapshot: (state) =>
+    set({
+      state,
+      events: state.recent_events ?? [],
+      baseState: state,
+      timeline: [],
+      replayCursor: null,
+    }),
 
   applyEvent: (event) =>
     set((store) => {
@@ -65,9 +85,20 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
       if (event.id && store.events.some((e) => e.id === event.id)) return store;
       const next = reduce(store.state, event);
       const notice = noticeFor(event, store.state);
+      // Keep the timeline bounded while preserving `fold(baseState, timeline) ===
+      // state`: once it overflows, fold the oldest event into the base instead of
+      // dropping it.
+      let baseState = store.baseState;
+      const timeline = [...store.timeline, event];
+      while (timeline.length > MAX_EVENTS) {
+        const oldest = timeline.shift()!;
+        if (baseState) baseState = reduce(baseState, oldest);
+      }
       return {
         state: next,
         events: [event, ...store.events].slice(0, MAX_EVENTS),
+        baseState,
+        timeline,
         ...(notice ? { notice } : {}),
       };
     }),
@@ -77,10 +108,14 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
   selectResponder: (selectedResponderId) => set({ selectedResponderId }),
   selectFire: (selectedFireId) => set({ selectedFireId }),
   setNotice: (notice) => set({ notice }),
+  setReplayCursor: (replayCursor) => set({ replayCursor }),
   reset: () =>
     set({
       state: null,
       events: [],
+      baseState: null,
+      timeline: [],
+      replayCursor: null,
       selectedResponderId: null,
       selectedFireId: null,
       notice: null,
@@ -91,7 +126,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
 // Event reducer — pure, returns a new MissionState.
 // ---------------------------------------------------------------------------
 
-function reduce(state: MissionState, event: MissionEvent): MissionState {
+export function reduce(state: MissionState, event: MissionEvent): MissionState {
   const p = event.payload as Record<string, any>;
 
   switch (event.type) {
